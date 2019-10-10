@@ -4,7 +4,7 @@ import glob
 import sys
 from pyproj import Proj, transform
 from bottle import *
-BaseRequest.MEMFILE_MAX = 1e8
+BaseRequest.MEMFILE_MAX = int(1e8)
 import time
 import json
 import os
