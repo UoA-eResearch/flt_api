@@ -22,9 +22,10 @@ def contains(bounds, point):
 app = Bottle()
 @app.route('/', method=['GET', 'POST'])
 def main():
-    try:
+    points = None
+    if request.params.get("points"):
         points = json.loads(request.params.get("points"))
-    except:
+    elif request.files.get("points"):
         decoded = request.files.get("points").file.read().decode("utf-8").split('\n')
         reader = csv.reader(decoded, delimiter=",")
         points = []
@@ -35,11 +36,22 @@ def main():
                 points.append((y, x))
             except:
                 continue
+    if not points:
+        response.status = 400
+        return {"error": "No points given"}
+    if type(points) != list or type(points[0]) not in [list, tuple]:
+        response.status = 400
+        return {"error": "Please give a list of coordinates"}
     print(f"Got {len(points)} points")
     proj = request.params.get("proj", "EPSG:4326")
     inProj = Proj(init=proj)
     outProj = Proj(init='EPSG:2193')
-    points = [transform(inProj, outProj, x, y) for y,x in points]
+    try:
+        points = [transform(inProj, outProj, x, y) for y,x in points]
+    except BaseException as e:
+        response.status = 400
+        e = str(e)[1:].strip("'")
+        return {"error": f"Projection conversion error: {e}"}
 
     results = [0] * len(points)
     for raster in rasters:
@@ -47,7 +59,10 @@ def main():
             if contains(raster.bounds, p):
                 vals = raster.sample([p])
                 results[i] = float(list(vals)[0][0])
-    return {"results": results}
+    payload = {"results": results}
+    if len(points[0]) > 2:
+        payload["warnings"] = ["More than 2 columns given - only the first 2 were used. Please only send 2."]
+    return payload
 
 port = int(os.environ.get('PORT', 8080))
 
