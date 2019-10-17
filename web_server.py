@@ -23,6 +23,7 @@ app = Bottle()
 @app.route('/', method=['GET', 'POST'])
 def main():
     points = None
+    warnings = set()
     if request.params.get("points"):
         try:
             points = json.loads(request.params.get("points"))
@@ -30,22 +31,31 @@ def main():
             response.status = 400
             return {"error": f"JSON decode error"}
     elif request.files.get("points"):
-        decoded = request.files.get("points").file.read().decode("utf-8").split('\n')
+        decoded = request.files.get("points").file.read().decode("utf-8").strip().split('\n')
         reader = csv.reader(decoded, delimiter=",")
-        points = []
-        for row in reader:
-            try:
-                y = float(row[0])
-                x = float(row[1])
-                points.append((y, x))
-            except:
-                continue
+        points = list(reader)
     if not points:
         response.status = 400
         return {"error": "No points given"}
     if type(points) != list or type(points[0]) not in [list, tuple]:
         response.status = 400
         return {"error": "Please give a list of coordinates"}
+    parsedPoints = []
+    for i, row in enumerate(points):
+        if type(row) not in [list, tuple]:
+            response.status = 400
+            return {"error": "Please give a list of coordinates"}
+        if len(row) < 2:
+            response.status = 400
+            return {"error": f"Less than 2 columns given on row {i}"}
+        elif len(row) > 2:
+            warnings.add("More than 2 columns given - only the first 2 were used. Please only send 2.")
+            points = [x[:2] for x in points]
+        try:
+            parsedPoints.append((float(row[0]), float(row[1])))
+        except:
+            warnings.add(f"Unable to parse row {i}")
+    points = parsedPoints
     print(f"Got {len(points)} points")
     proj = request.params.get("proj", "EPSG:4326")
     try:
@@ -54,8 +64,7 @@ def main():
         print("Points reprojected")
     except BaseException as e:
         response.status = 400
-        e = str(e)[1:].strip("'")
-        return {"error": f"Projection conversion error: {e}"}
+        return {"error": f"Projection conversion error: {str(e)}"}
 
     results = [0] * len(points)
     for raster in rasters:
@@ -63,9 +72,7 @@ def main():
             if contains(raster.bounds, p):
                 vals = raster.sample([p])
                 results[i] = float(list(vals)[0][0])
-    payload = {"results": results}
-    if len(points[0]) > 2:
-        payload["warnings"] = ["More than 2 columns given - only the first 2 were used. Please only send 2."]
+    payload = {"results": results, "warnings": list(warnings)}
     return payload
 
 port = int(os.environ.get('PORT', 8080))
