@@ -2,7 +2,7 @@
 import rasterio
 import glob
 import sys
-from pyproj import Proj, transform
+from pyproj import Transformer
 from bottle import *
 BaseRequest.MEMFILE_MAX = int(1e8)
 import time
@@ -44,10 +44,10 @@ def main():
         return {"error": "Please give a list of coordinates"}
     print(f"Got {len(points)} points")
     proj = request.params.get("proj", "EPSG:4326")
-    inProj = Proj(init=proj)
-    outProj = Proj(init='EPSG:2193')
     try:
-        points = [transform(inProj, outProj, x, y) for y,x in points]
+        transformer = Transformer.from_crs(proj, "EPSG:2193", always_xy=True)
+        points = [transformer.transform(x, y) for y,x in points]
+        print("Points reprojected")
     except BaseException as e:
         response.status = 400
         e = str(e)[1:].strip("'")
@@ -67,4 +67,4 @@ def main():
 port = int(os.environ.get('PORT', 8080))
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=port, debug=True, server='gunicorn', workers=4)
+    app.run(host='0.0.0.0', port=port, debug=True, server='gunicorn', workers=4, timeout=600)
