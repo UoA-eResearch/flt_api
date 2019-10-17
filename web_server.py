@@ -24,7 +24,11 @@ app = Bottle()
 def main():
     points = None
     if request.params.get("points"):
-        points = json.loads(request.params.get("points"))
+        try:
+            points = json.loads(request.params.get("points"))
+        except BaseException as e:
+            response.status = 400
+            return {"error": f"JSON decode error"}
     elif request.files.get("points"):
         decoded = request.files.get("points").file.read().decode("utf-8").split('\n')
         reader = csv.reader(decoded, delimiter=",")
