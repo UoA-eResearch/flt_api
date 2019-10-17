@@ -9,12 +9,16 @@ import time
 import json
 import os
 import csv
+import pandas as pd
 
 s = time.time()
 files = glob.glob("data/*.flt")
 print("Loading rasters")
 rasters = [rasterio.open(f) for f in files]
-print(f"{round(time.time() - s, 4)} - loaded")
+print(f"{round(time.time() - s, 4)} - flt loaded")
+
+rec = pd.read_csv("data/rec/river-environment-classification-new-zealand-2010.csv").drop(columns="WKT")
+print(f"{round(time.time() - s, 4)} - rec loaded")
 
 def contains(bounds, point):
     return point[0] > bounds.left and point[0] < bounds.right and point[1] > bounds.bottom and point[1] < bounds.top
@@ -74,6 +78,15 @@ def main():
                 results[i] = float(list(vals)[0][0])
     payload = {"results": results, "warnings": list(warnings)}
     return payload
+
+@app.route('/rec', method=['GET', 'POST'])
+def handle_rec():
+    reach = request.params.get("reach")
+    results = rec[rec.NZREACH == int(reach)].to_dict("records")
+    if not results:
+        response.status = 400
+        return {"error": f"NZREACH code not found"}
+    return results[0]
 
 port = int(os.environ.get('PORT', 8080))
 
