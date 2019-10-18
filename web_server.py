@@ -81,12 +81,30 @@ def main():
 
 @app.route('/rec', method=['GET', 'POST'])
 def handle_rec():
-    reach = request.params.get("reach")
-    results = rec[rec.NZREACH == int(reach)].to_dict("records")
+    reach_codes = []
+    if request.params.get("reach"):
+        try:
+            reach_codes = json.loads(request.params.get("reach"))
+        except BaseException as e:
+            response.status = 400
+            return {"error": f"JSON decode error"}
+    if not reach_codes:
+        response.status = 400
+        return {"error": "No reach codes given"}
+    if type(reach_codes) != list:
+        response.status = 400
+        return {"error": "Please give a list of reach codes"}
+    try:
+        reach_codes = [int(x) for x in reach_codes]
+    except:
+        response.status = 400
+        return {"error": "Unable to parse reach code as integers"}
+
+    results = rec[rec.NZREACH.isin(reach_codes)].to_dict("records")
     if not results:
         response.status = 400
         return {"error": f"NZREACH code not found"}
-    return results[0]
+    return {"results": results}
 
 port = int(os.environ.get('PORT', 8080))
 
